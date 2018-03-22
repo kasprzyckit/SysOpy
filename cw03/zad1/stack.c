@@ -44,3 +44,8 @@ int is_full(stack_s* s)
 	if (s == NULL) return 0;
 	return (s->top == STACK_MAX);
 }
+void clear_stack(stack_s* s)
+{
+	if (s == NULL) return;
+	s->top = 0;
+}

@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include "stack.h"
@@ -11,9 +10,6 @@
 #include <time.h>
 #include <errno.h>
 
-#define _XOPEN_SOURCE 500
-#include <ftw.h>
-
 #define ANSI_COLOR_RED     "\x1b[91m"
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_BLUE    "\x1b[34m"
@@ -21,11 +17,6 @@
 #define ANSI_COLOR_GREEN   "\x1b[32m"
 #define ANSI_COLOR_MAGNETA "\x1b[35m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
-
-struct stat compare_file;
-char oper[1];
-char path_link[PATH_MAX];
-int link_flag;
 
 void print_priv(const struct stat *st)
 {
@@ -66,30 +57,6 @@ int date_predicate(time_t date1, time_t date2, const char* operator)
 	return (res > 0);
 }
 
-int fn(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
-{
-	if (typeflag == FTW_F)
-	{
-		if (! date_predicate(sb->st_mtime, compare_file.st_mtime, oper)) return 0;
-
-		if (link_flag < 2 && strcmp(fpath, path_link) != 0)
-	    {
-	        strcpy(path_link, fpath);
-	        strcat(path_link, "_linkfromnftw");
-	    	link(fpath, path_link);
-	    	link_flag++;
-	    }
-
-		print_priv(sb);
-		printf(" %ld\t", sb->st_size);
-		char mod_date[100];
-	    strftime(mod_date, 1000, " %b %d %H:%M", localtime(&sb->st_mtime));
-	    printf(ANSI_COLOR_MAGNETA "%s" ANSI_COLOR_RESET, mod_date);
-	    printf(" %s\n", fpath);
-	}
-	return 0;
-}
-
 int main(int argc, char const *argv[])
 {
 
@@ -104,7 +71,6 @@ int main(int argc, char const *argv[])
 		printf("Incorrect arguments!\n");
 		return 1;
 	}
-	strcpy(oper, argv[2]);
 
 	char arg_file[PATH_MAX];
 	if (! realpath(strdup(argv[1]), arg_file))
@@ -113,21 +79,18 @@ int main(int argc, char const *argv[])
 		return 1;
 	}
 
+	struct stat compare_file;
 	if (! stat(argv[3], &compare_file) == 0)
 	{
 		perror(argv[3]);
 		return 1;
 	}
-
-	link_flag = 0;
 	
 //////////////////////////////////////////////////////////
 
 //			USING OPENDIR
 
 //////////////////////////////////////////////////////////
-
-	printf(ANSI_COLOR_RED "Using readdir:\n" ANSI_COLOR_RESET);
 
 	char path[PATH_MAX];
 	char path_new[PATH_MAX];
@@ -141,8 +104,12 @@ int main(int argc, char const *argv[])
 	push(dirs, arg_file, strlen(arg_file));
 	while (! is_empty(dirs))
 	{
+
 		pop(dirs, path);
 		openv = 1;
+		if (fork()) continue;
+		else clear_stack(dirs);
+
 		if((dirp = opendir(path)) )
 		{
 	        while((file = readdir(dirp))) 
@@ -160,22 +127,13 @@ int main(int argc, char const *argv[])
 	        	}
 
 	        	stat(path_new, &st);
-	        	if (! date_predicate(st.st_mtime, compare_file.st_mtime, oper)) continue;
-
-	        	if (link_flag < 1)
-	        	{
-	        		strcpy(path_link, path_new);
-	        		strcat(path_link, "_linkfromopendir");
-	        		link(path_new, path_link);
-	        		link_flag++;
-	        	}
+	        	if (! date_predicate(st.st_mtime, compare_file.st_mtime, argv[2])) continue;
 
 	        	if (openv && file->d_type == DT_REG)
 	        	{
 	        		printf(ANSI_COLOR_CYAN "\n%s:\n" ANSI_COLOR_RESET, path);
 	        		openv--;
 	        	}
-
 	        	print_priv(&st);
 
 	        	printf(" %ld\t", st.st_size);
@@ -197,20 +155,6 @@ int main(int argc, char const *argv[])
     	}
 	}
 	delete_stack(dirs);
-	
-//////////////////////////////////////////////////////////
-
-//			USING NFTW
-
-//////////////////////////////////////////////////////////
-
-	printf(ANSI_COLOR_RED "\n\nUsing nftw:\n\n" ANSI_COLOR_RESET);
-
-	if (nftw(arg_file, &fn, 10, NULL) < 0)
-	{
-		perror("NFTW error");
-		return 1;
-	}
 
 	return 0;
 }

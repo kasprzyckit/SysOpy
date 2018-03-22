@@ -17,4 +17,5 @@ void pop(stack_s* s, char* el);
 void delete_stack(stack_s* s);
 int is_empty(stack_s* s);
 int is_full(stack_s* s);
+void clear_stack(stack_s* s);
 #endif
