@@ -96,6 +96,7 @@ int main(int argc, char const *argv[])
 	char path_new[PATH_MAX];
 	char mod_date[100];
 	int openv;
+	int fork_ret;
 	DIR* dirp;
 	struct dirent* file;
 	struct stat st;
@@ -107,7 +108,13 @@ int main(int argc, char const *argv[])
 
 		pop(dirs, path);
 		openv = 1;
-		if (fork()) continue;
+		fork_ret = fork();
+		if (fork < 0)
+		{
+			perror(path);
+			break;
+		}
+		if (fork_ret) continue;
 		else clear_stack(dirs);
 
 		if((dirp = opendir(path)) )
@@ -126,7 +133,11 @@ int main(int argc, char const *argv[])
 	        		continue;
 	        	}
 
-	        	stat(path_new, &st);
+	        	if (! stat(path_new, &st))
+	        	{
+	        		perror(path_new);
+	        		continue;
+	        	}
 	        	if (! date_predicate(st.st_mtime, compare_file.st_mtime, argv[2])) continue;
 
 	        	if (openv && file->d_type == DT_REG)
@@ -143,18 +154,10 @@ int main(int argc, char const *argv[])
 	        }
 	        closedir(dirp);
     	}
-    	else
-    	{
-    		if (errno == EACCES) printf("Permission to %s denied.", path);
-    		perror(path);
-    		if (errno == ENOTDIR)
-    		{
-    			delete_stack(dirs);
-    			return 1;
-    		}
-    	}
+    	else perror(path);
 	}
 	delete_stack(dirs);
 
-	return 0;
+	if (! errno) exit(EXIT_SUCCESS);
+	exit(EXIT_FAILURE;)
 }

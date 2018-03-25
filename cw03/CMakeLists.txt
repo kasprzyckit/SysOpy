@@ -6,5 +6,4 @@ SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
 
 add_subdirectory (zad1)
 add_subdirectory (zad2)
-add_subdirectory (zad3a)
-add_subdirectory (zad3b)
+add_subdirectory (zad3)

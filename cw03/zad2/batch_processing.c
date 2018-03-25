@@ -37,10 +37,17 @@ int main(int argc, char const *argv[])
 	{
 		count++;
 		child_pid = fork();
+		if (child_pid < 0)
+		{
+			perror(line);
+			break;
+		}
 		if (child_pid == 0)
 		{
 			words_list wl = getwords(strdup(line));
 			free(line);
+			fclose(fp);
+
 			execvp(wl.list[0], wl.list);
 			not_found = 1;
 			break;
@@ -48,18 +55,27 @@ int main(int argc, char const *argv[])
 		else
 		{
 			printf(ANSI_COLOR_CYAN"\nin[%i]$" ANSI_COLOR_BLUE" %s" ANSI_COLOR_RESET "\n", count, line);
-			waitpid(child_pid, &sl, WCONTINUED);
+			if (waitpid(child_pid, &sl, WUNTRACED) < 0)
+			{
+				perror(line);
+				break;
+			}
 			if (WEXITSTATUS(sl))
 			{
-				printf(ANSI_COLOR_RED "Command #%i has failed!"ANSI_COLOR_RESET "\n", count);
+				printf(ANSI_COLOR_RED "Job #%i has failed!"ANSI_COLOR_RESET "\n", count);
+				break;
+			}
+			else if (WIFSIGNALED(sl))
+			{
+				printf(ANSI_COLOR_RED "\nJob #%i has been terminated or reached one of its resource usage limit!" ANSI_COLOR_RESET "\n", count);
 				break;
 			}
 		}
     }
 
-    fclose(fp);
     if (not_found) exit(EXIT_FAILURE);
+    fclose(fp);
 	if (line != NULL) free(line);
-
+	if (! errno) exit(EXIT_SUCCESS);
 	exit(EXIT_SUCCESS);
 }
