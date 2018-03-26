@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 #include "words.h"
 
 #define ANSI_COLOR_CYAN    "\x1b[36m"
@@ -63,11 +64,6 @@ int main(int argc, char const *argv[])
 			if (WEXITSTATUS(sl))
 			{
 				printf(ANSI_COLOR_RED "Job #%i has failed!"ANSI_COLOR_RESET "\n", count);
-				break;
-			}
-			else if (WIFSIGNALED(sl))
-			{
-				printf(ANSI_COLOR_RED "\nJob #%i has been terminated or reached one of its resource usage limit!" ANSI_COLOR_RESET "\n", count);
 				break;
 			}
 		}

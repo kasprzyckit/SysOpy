@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <errno.h>
 #include "../zad2/words.h"
 
 #define ANSI_COLOR_CYAN    "\x1b[36m"

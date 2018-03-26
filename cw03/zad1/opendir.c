@@ -133,7 +133,7 @@ int main(int argc, char const *argv[])
 	        		continue;
 	        	}
 
-	        	if (! stat(path_new, &st))
+	        	if (stat(path_new, &st) < 0)
 	        	{
 	        		perror(path_new);
 	        		continue;
@@ -159,5 +159,5 @@ int main(int argc, char const *argv[])
 	delete_stack(dirs);
 
 	if (! errno) exit(EXIT_SUCCESS);
-	exit(EXIT_FAILURE;)
+	exit(EXIT_FAILURE);
 }
