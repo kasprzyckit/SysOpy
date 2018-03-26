@@ -110,10 +110,8 @@ int main(int argc, char const *argv[])
     		}
 
 			words_list wl = getwords(strdup(line));
-			free(line);
-			free(usage_old);
-			free(usage_new);
-			free(limits);
+
+
     		fclose(fp);
 
     		execvp(wl.list[0], wl.list);
@@ -146,13 +144,12 @@ int main(int argc, char const *argv[])
 			}
 		}
     }
-
-    if (not_found) exit(EXIT_FAILURE);
-    fclose(fp);
+    
 	if (line != NULL) free(line);
 	free(usage_old);
 	free(usage_new);
 	free(limits);
-	if (! errno) exit(EXIT_SUCCESS);
+    if (not_found) exit(EXIT_FAILURE);
+    fclose(fp);
 	exit(EXIT_SUCCESS);
 }

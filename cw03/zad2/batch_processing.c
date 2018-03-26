@@ -46,8 +46,8 @@ int main(int argc, char const *argv[])
 		if (child_pid == 0)
 		{
 			words_list wl = getwords(strdup(line));
-			free(line);
-			fclose(fp);
+
+    		fclose(fp);
 
 			execvp(wl.list[0], wl.list);
 			not_found = 1;
@@ -69,9 +69,8 @@ int main(int argc, char const *argv[])
 		}
     }
 
+	if (line != NULL) free(line);
     if (not_found) exit(EXIT_FAILURE);
     fclose(fp);
-	if (line != NULL) free(line);
-	if (! errno) exit(EXIT_SUCCESS);
 	exit(EXIT_SUCCESS);
 }
