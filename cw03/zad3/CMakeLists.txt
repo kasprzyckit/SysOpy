@@ -1,4 +1,4 @@
-add_executable(BatchLimits batch_processing.c words.c)
+add_executable(BatchLimits batch_processing.c ../zad2/words.c)
 add_executable(TestMemory test_memory.c)
 add_executable(TestCPU test_cpu.c)
 
