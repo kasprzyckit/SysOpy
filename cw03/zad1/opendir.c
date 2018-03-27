@@ -96,7 +96,7 @@ int main(int argc, char const *argv[])
 	char path_new[PATH_MAX];
 	char mod_date[100];
 	int openv;
-	int fork_ret;
+	pid_t fork_ret;
 	DIR* dirp;
 	struct dirent* file;
 	struct stat st;
