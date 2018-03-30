@@ -95,7 +95,6 @@ int main(int argc, char const *argv[])
 	char path[PATH_MAX];
 	char path_new[PATH_MAX];
 	char mod_date[100];
-	int openv;
 	pid_t fork_ret;
 	DIR* dirp;
 	struct dirent* file;
@@ -107,7 +106,6 @@ int main(int argc, char const *argv[])
 	{
 
 		pop(dirs, path);
-		openv = 1;
 		fork_ret = fork();
 		if (fork < 0)
 		{
@@ -140,11 +138,6 @@ int main(int argc, char const *argv[])
 	        	}
 	        	if (! date_predicate(st.st_mtime, compare_file.st_mtime, argv[2])) continue;
 
-	        	if (openv && file->d_type == DT_REG)
-	        	{
-	        		printf(ANSI_COLOR_CYAN "\n%s:\n" ANSI_COLOR_RESET, path);
-	        		openv--;
-	        	}
 	        	print_priv(&st);
 
 	        	printf(" %ld\t", st.st_size);
