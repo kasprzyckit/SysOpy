@@ -1,77 +1,89 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-#include <sys/time.h>
-#include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
-#include <sys/wait.h>
+#include <semaphore.h>
+#include <sys/mman.h>
+
+#define ANSI_COLOR_RED     "\x1b[91m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_MAGNETA "\x1b[35m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
 
 int litter;
 int threshold;
 int trigger;
 pid_t* pending;
+sem_t* semaphore;
 
-/*void sigint_parent(int sig)
+void ws_offset(int i){for(;i>0;i--)printf("  ");}
+
+void sigint_parent(int sig)
 {
-	printf("kill %i %i\n", getpid(), getpgrp());
 	if (sig == SIGINT)
 	{
-		printf("Terminating the job.\n");
+		printf("\nTerminating the job.\n");
     	free(pending);
-		//kill(getpgrp() * (-1), 9);
-		exit(EXIT_SUCCESS);
+		kill(getpgrp() * (-1), 9);
 	}
-
-}*/
+}
 
 void sig_parent(int sig, siginfo_t *siginfo, void *ucontex)
 {
-	if (siginfo->si_pid == getpid()) return;
+	int psig = siginfo->si_pid;
+	int ws = psig- getpid();
+	if (psig == getpid()) return;
 	if (sig == SIGUSR1)
 	{
-//		printf("1\n");
-		printf("Received SIGUSR1 from %i\n", siginfo->si_pid);
+		printf("Received "ANSI_COLOR_CYAN"SIGUSR1"ANSI_COLOR_RESET":\t");
+		ws_offset(ws);
+		printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", psig);
 		if (trigger)
 		{
-//			printf("2\n");
+
 			trigger--;
-//			printf("tt %i\n", trigger);
-			pending[trigger] = siginfo->si_pid;
+			pending[trigger] = psig;
 			if (trigger == 0)
 			{
-//				printf("3\n");
 				int i;
 				for (i = 0; i<threshold; i++)
 				{
-					printf("Granting RT request: %i\n", pending[i]);
+					ws = pending[i] - getpid();
+					printf("Granting "ANSI_COLOR_MAGNETA"RT request"ANSI_COLOR_RESET":\t");
+					ws_offset(ws);
+					printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", pending[i]);
 					kill(pending[i], SIGUSR1);
 				}
 			}
 		}
 		else
 		{
-//			printf("4\n");
-			printf("Granting RT request: %i\n", siginfo->si_pid);
-			kill(siginfo->si_pid, SIGUSR1);
+			printf("Granting "ANSI_COLOR_MAGNETA"RT request"ANSI_COLOR_RESET":\t");
+			ws_offset(ws);
+			printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", psig);
+			kill(psig, SIGUSR1);
 		}
 	}
 	else if (sig >= SIGRTMIN && sig <= SIGRTMAX)
 	{
 		litter--;
-//		printf("ll %i\n", litter);
-//		printf("5\n");
-		printf("Received SIGMIN+%i from %i\n", sig - SIGRTMIN, siginfo->si_pid);
+		printf("Received "ANSI_COLOR_GREEN"SIGMIN+%i"ANSI_COLOR_RESET":\t", sig - SIGRTMIN);
+		ws_offset(ws);
+		printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", psig);
 	}
 	else printf("??? %i\n", sig);
+
+	sem_post(semaphore);
 }
 
 void sigusr_child(int sig)
 {
-	int tt = SIGRTMIN + rand()%32;
-//	printf("Sending rt %i: %i\n", tt, getpid());
-	kill(getppid(), tt);
+	sem_wait(semaphore);
+	kill(getppid(), SIGRTMIN + rand()%32);
 }
 
 int child_function()
@@ -81,29 +93,31 @@ int child_function()
     seed = time(&tt);
     srand(seed + getpid());
 
-//	printf("%i %i\n", getpid(), getpgrp());
 	if (signal(SIGUSR1, sigusr_child) == SIG_ERR)
 	{
 		perror("SIGUSR1 child");
 		exit(EXIT_FAILURE);
 	}
 
-	sigset_t mask;
-	sigfillset(&mask);
-	sigdelset(&mask, SIGUSR1);
-
-	if (sigprocmask(SIG_BLOCK, &mask, NULL) < 0)
+	sigset_t newmask;
+	sigset_t oldmask;
+	sigfillset(&newmask);
+	sigdelset(&newmask, SIGUSR1);
+	if (sigprocmask(SIG_SETMASK, &newmask, &oldmask) < 0)
 		perror("Child mask");
 
 	int rsl = rand()%10 + 1;
-//	printf("sleeping for %i: %i\n", rsl, getpid());
 	sleep(rsl);
-//	printf("waked up: %i\n", getpid());
-
+	
+	sem_wait(semaphore);
 	kill(getppid(), SIGUSR1);
-	sigsuspend(&mask);
+	
+	sigsuspend(&newmask);
 
-	printf("Returning with value %i: %i\n", rsl, getpid());
+	printf("Returning value "ANSI_COLOR_RED"%i"ANSI_COLOR_RESET":\t", rsl);
+	ws_offset(getpid() - getppid());
+	printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", getpid());
+	
 	return rsl;
 }
 
@@ -114,13 +128,22 @@ void parent_function()
     seed = time(&tt);
     srand(seed + getpid());
 
- //   signal(SIGINT, sigint_parent);
-
-	struct sigaction act;
-	act.sa_sigaction = sig_parent;
+    struct sigaction act;
+    act.sa_handler = sigint_parent;
 	sigfillset(&act.sa_mask);
-//	sigdelset(&act.sa_mask, SIGINT);
-	act.sa_flags = SA_SIGINFO;
+	sigaddset(&act.sa_mask, SIGUSR1);
+	act.sa_flags = 0;
+	if (sigaction(SIGINT, &act, NULL) < -1)
+	{
+		perror("Parent SIGINT");
+    	free(pending);
+		kill(getpgrp() * (-1), 9);
+		exit(EXIT_FAILURE);
+	}
+	act.sa_handler = NULL;
+	sigemptyset(&act.sa_mask);
+	act.sa_sigaction = sig_parent;
+	act.sa_flags = SA_SIGINFO | SA_NODEFER;
 	if (sigaction(SIGUSR1, &act, NULL) < -1)
 	{
 		perror("Parent SIGUSR1");
@@ -139,13 +162,15 @@ void parent_function()
 			exit(EXIT_FAILURE);
 		}
 	}
+	sigset_t mask;
+	sigemptyset(&mask);
+
 	while (litter > 0)
 	{
-//		printf("asdasd %i %i\n", litter, trigger);
-		pause();
+		sigsuspend(&mask);
 	}
+	sem_destroy(semaphore);
 	printf("Exiting normally\n");
-	kill(getpgrp() * (-1), 9);
 }
 
 int main(int argc, char const *argv[])
@@ -168,6 +193,9 @@ int main(int argc, char const *argv[])
     pid_t tmp;
     pending = malloc(threshold * sizeof(pid_t));
 
+    semaphore = (sem_t*) mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
+    sem_init(semaphore, 1, 1);
+
     if (getpgrp() != getpid())
     {
     	if (setsid() < 0)
@@ -176,7 +204,6 @@ int main(int argc, char const *argv[])
     		exit(EXIT_FAILURE);
     	}
     }
-//    printf("ddd %i %i\n", litter, trigger);
     for (i = 0; i < litter; i++)
     {
     	if ((tmp = fork()) < 0)
@@ -185,12 +212,13 @@ int main(int argc, char const *argv[])
     		exit(EXIT_FAILURE);
     	}
     	if (tmp == 0) break;
-    	printf("Created child process: %i\n", tmp);
+    	printf("Created process:\t");
+    	ws_offset(tmp - getpid());
+    	printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", tmp);
     }
 
     if (tmp == 0) exit(child_function());
-    
-    parent_function();
+    else parent_function();
     free(pending);
-	return 0;
+	exit(EXIT_SUCCESS);
 }
