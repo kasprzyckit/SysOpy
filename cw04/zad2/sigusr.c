@@ -31,8 +31,9 @@ int threshold;
 int trigger;
 pid_t* pending;
 sem_t* semaphore;
+int indent;
 
-void ws_offset(int i){for(;i>0;i--)printf("  ");}
+void ws_offset(int i){if (indent) return; for(;i>0;i--)printf("  ");}
 
 void sigint_parent(int sig)
 {
@@ -232,8 +233,9 @@ int main(int argc, char **argv)
             {"help", no_argument, 0, 'h'},
             {0, 0, 0, 0}
         };
+    indent = 0;
     int option_index = 0;
-    while ((c = getopt_long(argc, argv, "abcdehz", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "abcdehiz", long_options, &option_index)) != -1)
     {
         switch (c)
         {
@@ -252,6 +254,9 @@ int main(int argc, char **argv)
             case 'e':
                 pflag = pflag | RETURN_PFLAG;
                 break;
+            case 'i':
+                indent = 1;
+                break;
             case 'h':
                 printf("Usage: ./SIGUSR [OPTION]... PROCESSES TRIGGER\n" \
                     "  -a\t\t print creation of process\n" \
@@ -260,6 +265,7 @@ int main(int argc, char **argv)
                     "  -d\t\t print received RT signals\n" \
                     "  -e\t\t print return values\n" \
                     "  -h, --help\t show this help\n" \
+                    "  -i\t\t indentation off\n" \
                     "  -z, --all\t print all\n");
                 break;
             case 'z':
