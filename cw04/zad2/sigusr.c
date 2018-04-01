@@ -64,7 +64,7 @@ void sig_parent(int sig, siginfo_t *siginfo, void *ucontex)
 			if (trigger == 0)
 			{
 				int i;
-				for (i = 0; i<threshold; i++)
+				for (i = threshold-1; i>=0; i--)
 				{
 					if (pflag & GRANT_PFLAG)
     				{
