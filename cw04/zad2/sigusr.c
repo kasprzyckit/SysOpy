@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <semaphore.h>
 #include <sys/mman.h>
+#include <stdint.h>
+#include <getopt.h>
 
 #define ANSI_COLOR_RED     "\x1b[91m"
 #define ANSI_COLOR_CYAN    "\x1b[36m"
@@ -14,6 +16,16 @@
 #define ANSI_COLOR_MAGNETA "\x1b[35m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
+#define EMPTY_PFLAG		0x00
+#define FULL_PFLAG		0x1f
+#define CREATE_PFLAG 	0x01
+#define REQUEST_PFLAG 	0x02
+#define GRANT_PFLAG 	0x04
+#define RT_PFLAG 		0x08
+#define RETURN_PFLAG 	0x10
+typedef uint8_t pflag_t;
+
+pflag_t pflag;
 int litter;
 int threshold;
 int trigger;
@@ -28,62 +40,72 @@ void sigint_parent(int sig)
 	{
 		printf("\nTerminating the job.\n");
     	free(pending);
+    	munmap(semaphore, sizeof(sem_t));
 		kill(getpgrp() * (-1), 9);
 	}
 }
 
 void sig_parent(int sig, siginfo_t *siginfo, void *ucontex)
 {
-	int psig = siginfo->si_pid;
-	int ws = psig- getpid();
-	if (psig == getpid()) return;
+	if (siginfo->si_pid == getpid()) return;
+	int ws = siginfo->si_pid- getpid();
 	if (sig == SIGUSR1)
 	{
-		printf("Received "ANSI_COLOR_CYAN"SIGUSR1"ANSI_COLOR_RESET":\t");
-		ws_offset(ws);
-		printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", psig);
+		if (pflag & REQUEST_PFLAG)
+    	{
+			printf("Received "ANSI_COLOR_CYAN"SIGUSR1"ANSI_COLOR_RESET":\t");
+			ws_offset(ws);
+			printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", siginfo->si_pid);
+		}
 		if (trigger)
 		{
-
 			trigger--;
-			pending[trigger] = psig;
+			pending[trigger] = siginfo->si_pid;
 			if (trigger == 0)
 			{
 				int i;
 				for (i = 0; i<threshold; i++)
 				{
-					ws = pending[i] - getpid();
-					printf("Granting "ANSI_COLOR_MAGNETA"RT request"ANSI_COLOR_RESET":\t");
-					ws_offset(ws);
-					printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", pending[i]);
+					if (pflag & GRANT_PFLAG)
+    				{
+						ws = pending[i] - getpid();
+						printf("Granting "ANSI_COLOR_MAGNETA"RT request"ANSI_COLOR_RESET":\t");
+						ws_offset(ws);
+						printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", pending[i]);
+					}
 					kill(pending[i], SIGUSR1);
 				}
 			}
 		}
 		else
 		{
-			printf("Granting "ANSI_COLOR_MAGNETA"RT request"ANSI_COLOR_RESET":\t");
-			ws_offset(ws);
-			printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", psig);
-			kill(psig, SIGUSR1);
+			if (pflag & GRANT_PFLAG)
+    		{
+				printf("Granting "ANSI_COLOR_MAGNETA"RT request"ANSI_COLOR_RESET":\t");
+				ws_offset(ws);
+				printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", siginfo->si_pid);
+			}
+			kill(siginfo->si_pid, SIGUSR1);
 		}
 	}
 	else if (sig >= SIGRTMIN && sig <= SIGRTMAX)
 	{
 		litter--;
-		printf("Received "ANSI_COLOR_GREEN"SIGMIN+%i"ANSI_COLOR_RESET":\t", sig - SIGRTMIN);
-		ws_offset(ws);
-		printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", psig);
+		if (pflag & RT_PFLAG)
+    	{
+			printf("Received "ANSI_COLOR_GREEN"SIGMIN+%i"ANSI_COLOR_RESET":\t", sig - SIGRTMIN);
+			ws_offset(ws);
+			printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", siginfo->si_pid);
+		}
 	}
 	else printf("??? %i\n", sig);
-
 	sem_post(semaphore);
 }
 
 void sigusr_child(int sig)
 {
 	sem_wait(semaphore);
-	kill(getppid(), SIGRTMIN + rand()%32);
+	kill(getppid(), SIGRTMIN + rand()%(SIGRTMAX - SIGRTMIN + 1));
 }
 
 int child_function()
@@ -108,16 +130,16 @@ int child_function()
 
 	int rsl = rand()%10 + 1;
 	sleep(rsl);
-	
 	sem_wait(semaphore);
 	kill(getppid(), SIGUSR1);
 	
 	sigsuspend(&newmask);
-
-	printf("Returning value "ANSI_COLOR_RED"%i"ANSI_COLOR_RESET":\t", rsl);
-	ws_offset(getpid() - getppid());
-	printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", getpid());
-	
+	if (pflag & RETURN_PFLAG)
+    {
+		printf("Returning value "ANSI_COLOR_RED"%i"ANSI_COLOR_RESET":\t", rsl);
+		ws_offset(getpid() - getppid());
+		printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", getpid());
+	}
 	return rsl;
 }
 
@@ -137,6 +159,7 @@ void parent_function()
 	{
 		perror("Parent SIGINT");
     	free(pending);
+    	munmap(semaphore, sizeof(sem_t));
 		kill(getpgrp() * (-1), 9);
 		exit(EXIT_FAILURE);
 	}
@@ -148,6 +171,7 @@ void parent_function()
 	{
 		perror("Parent SIGUSR1");
     	free(pending);
+    	munmap(semaphore, sizeof(sem_t));
 		kill(getpgrp() * (-1), 9);
 		exit(EXIT_FAILURE);
 	}
@@ -158,30 +182,65 @@ void parent_function()
 		{
 			perror("Parent SIGRT");
    			free(pending);
+   			munmap(semaphore, sizeof(sem_t));
 			kill(getpgrp() * (-1), 9);
 			exit(EXIT_FAILURE);
 		}
 	}
-	sigset_t mask;
-	sigemptyset(&mask);
-
-	while (litter > 0)
-	{
-		sigsuspend(&mask);
-	}
-	sem_destroy(semaphore);
+	while (litter > 0) pause();
 	printf("Exiting normally\n");
 }
 
-int main(int argc, char const *argv[])
+int main(int argc, char **argv)
 {
 	if (argc < 3)
 	{
 		printf("Too few arguments!\n");
 		exit(EXIT_FAILURE);
 	}
-	litter = atoi(argv[1]);
-	threshold = atoi(argv[2]);
+	pflag = EMPTY_PFLAG; 
+	int c;
+	static struct option long_options[] =
+		{
+			{"all", no_argument, 0, 'z'},
+			{0, 0, 0, 0}
+		};
+	int option_index = 0;
+	while ((c = getopt_long(argc, argv, "abcdez", long_options, &option_index)) != -1)
+	{
+		switch (c)
+		{
+			case 0:
+				if (long_options[option_index].val == 7)
+					pflag = FULL_PFLAG;
+				break;
+			case 'a':
+				pflag = pflag | CREATE_PFLAG;
+				break;
+			case 'b':
+				pflag = pflag | REQUEST_PFLAG;
+				break;
+			case 'c':
+				pflag = pflag | GRANT_PFLAG;
+				break;
+			case 'd':
+				pflag = pflag | RT_PFLAG;
+				break;
+			case 'e':
+				pflag = pflag | RETURN_PFLAG;
+				break;
+			case 'z':
+				pflag = FULL_PFLAG;
+				break;
+			case '?':
+				break;
+		    default:
+		    	abort();
+		}
+	}
+	litter = atoi(argv[optind++]);
+	threshold = atoi(argv[optind]);
+
 	if (litter <= 0 || threshold <= 0 || threshold > litter)
 	{
 		printf("Incorrect arguments!\n");
@@ -193,7 +252,8 @@ int main(int argc, char const *argv[])
     pid_t tmp;
     pending = malloc(threshold * sizeof(pid_t));
 
-    semaphore = (sem_t*) mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
+    semaphore = (sem_t*) mmap(NULL, sizeof(sem_t), \
+    	PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
     sem_init(semaphore, 1, 1);
 
     if (getpgrp() != getpid())
@@ -212,13 +272,20 @@ int main(int argc, char const *argv[])
     		exit(EXIT_FAILURE);
     	}
     	if (tmp == 0) break;
-    	printf("Created process:\t");
-    	ws_offset(tmp - getpid());
-    	printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", tmp);
+    	if (pflag & CREATE_PFLAG)
+    	{
+	    	printf("Created process:\t");
+	    	ws_offset(tmp - getpid());
+	    	printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", tmp);
+	    }
     }
 
     if (tmp == 0) exit(child_function());
-    else parent_function();
-    free(pending);
+    
+    parent_function();
+   
+   	free(pending);
+	sem_destroy(semaphore);
+    munmap(semaphore, sizeof(sem_t));
 	exit(EXIT_SUCCESS);
 }
