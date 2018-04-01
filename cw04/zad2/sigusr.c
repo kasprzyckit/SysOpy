@@ -210,10 +210,6 @@ int main(int argc, char **argv)
 	{
 		switch (c)
 		{
-			/*case 0:
-				if (long_options[option_index].val == 7)
-					pflag = FULL_PFLAG;
-				break;*/
 			case 'a':
 				pflag = pflag | CREATE_PFLAG;
 				break;
