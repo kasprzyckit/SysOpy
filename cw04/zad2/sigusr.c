@@ -73,7 +73,14 @@ void sig_parent(int sig, siginfo_t *siginfo, void *ucontex)
                         ws_offset(ws);
                         printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", pending[i]);
                     }
-                    kill(pending[i], SIGUSR1);
+                    if (kill(pending[i], SIGUSR1) < 0)
+                    {
+                        perror("Threshold grant");
+                        free(pending);
+                        munmap(semaphore, sizeof(sem_t));
+                        kill(getpgrp() * (-1), 9);
+                        exit(EXIT_FAILURE);
+                    }
                 }
             }
         }
@@ -85,7 +92,14 @@ void sig_parent(int sig, siginfo_t *siginfo, void *ucontex)
                 ws_offset(ws);
                 printf(ANSI_COLOR_BLUE"%i"ANSI_COLOR_RESET"\n", siginfo->si_pid);
             }
-            kill(siginfo->si_pid, SIGUSR1);
+            if (kill(siginfo->si_pid, SIGUSR1) < 0)
+            {
+                    perror("Regular grant");
+                    free(pending);
+                    munmap(semaphore, sizeof(sem_t));
+                    kill(getpgrp() * (-1), 9);
+                    exit(EXIT_FAILURE);
+            }
         }
     }
     else if (sig >= SIGRTMIN && sig <= SIGRTMAX)
@@ -105,7 +119,13 @@ void sig_parent(int sig, siginfo_t *siginfo, void *ucontex)
 void sigusr_child(int sig)
 {
     sem_wait(semaphore);
-    kill(getppid(), SIGRTMIN + rand()%(SIGRTMAX - SIGRTMIN + 1));
+    if (kill(getppid(), SIGRTMIN + rand()%(SIGRTMAX - SIGRTMIN + 1)) < 0)
+    {
+        perror("Child RT");
+        munmap(semaphore, sizeof(sem_t));
+        kill(getpgrp() * (-1), 9);
+        exit(EXIT_FAILURE);
+    }
 }
 
 int child_function()
@@ -131,7 +151,13 @@ int child_function()
     int rsl = rand()%10 + 1;
     sleep(rsl);
     sem_wait(semaphore);
-    kill(getppid(), SIGUSR1);
+    if (kill(getppid(), SIGUSR1) < 0)
+    {
+        perror("Child SIGUSR1");
+        munmap(semaphore, sizeof(sem_t));
+        kill(getpgrp() * (-1), 9);
+        exit(EXIT_FAILURE);
+    }
     
     sigsuspend(&newmask);
     if (pflag & RETURN_PFLAG)
@@ -203,10 +229,11 @@ int main(int argc, char **argv)
     static struct option long_options[] =
         {
             {"all", no_argument, 0, 'z'},
+            {"help", no_argument, 0, 'h'},
             {0, 0, 0, 0}
         };
     int option_index = 0;
-    while ((c = getopt_long(argc, argv, "abcdez", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "abcdehz", long_options, &option_index)) != -1)
     {
         switch (c)
         {
@@ -224,6 +251,16 @@ int main(int argc, char **argv)
                 break;
             case 'e':
                 pflag = pflag | RETURN_PFLAG;
+                break;
+            case 'h':
+                printf("Usage: ./SIGUSR [OPTION]... PROCESSES TRIGGER\n" \
+                    "  -a\t\t print creation of process\n" \
+                    "  -b\t\t print received SIGUSR1 signals\n" \
+                    "  -c\t\t print granted requests for sending a RT signal\n" \
+                    "  -d\t\t print received RT signals\n" \
+                    "  -e\t\t print return values\n" \
+                    "  -h, --help\t show this help\n" \
+                    "  -z, --all\t print all\n");
                 break;
             case 'z':
                 pflag = FULL_PFLAG;
@@ -246,17 +283,34 @@ int main(int argc, char **argv)
 
     int i;
     pid_t tmp;
-    pending = malloc(threshold * sizeof(pid_t));
+    if ((pending = malloc(threshold * sizeof(pid_t))) < 0)
+    {
+        perror("Pending processes array allocation");
+        exit(EXIT_FAILURE); 
+    }
 
-    semaphore = (sem_t*) mmap(NULL, sizeof(sem_t), \
-        PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
-    sem_init(semaphore, 1, 1);
+    if ((semaphore = (sem_t*) mmap(NULL, sizeof(sem_t), \
+                PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0)) < 0)
+    {
+        perror("Semaphore allocation");
+        free(pending);
+        exit(EXIT_FAILURE);
+    }
+    if (sem_init(semaphore, 1, 1) < 0)
+    {
+        perror("Semaphore init");
+        free(pending);
+        munmap(semaphore, sizeof(sem_t));
+        exit(EXIT_FAILURE);
+    }
 
     if (getpgrp() != getpid())
     {
         if (setsid() < 0)
         {
             perror("");
+            free(pending);
+            munmap(semaphore, sizeof(sem_t));
             exit(EXIT_FAILURE);
         }
     }
