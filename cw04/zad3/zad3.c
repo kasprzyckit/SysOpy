@@ -10,12 +10,9 @@
 #define ANSI_COLOR_RED     "\x1b[91m"
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_BLUE    "\x1b[34m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_MAGNETA "\x1b[35m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-int count;
 int count1;
 int count2;
 pid_t child;
@@ -158,7 +155,7 @@ int main(int argc, char const *argv[])
     sigdelset(&newmask, SIGRTMIN);
     sigdelset(&newmask, SIGRTMAX);
     if (sigprocmask(SIG_SETMASK, &newmask, &oldmask) < 0)
-        perror("Child mask");
+        perror("Signal mask");
 
     sem_wait(semaphore);
     parent = getpid();
