@@ -1,0 +1,1 @@
+add_executable(BatchPipes batch_processing.c words.c)
