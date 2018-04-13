@@ -61,7 +61,7 @@ int main(int argc, char const *argv[])
         for (i = 0; i < el.length; i++)
         {
             if (waitpid(child_pid[i], &sl, 0) < 0) err(line);
-            if (WEXITSTATUS(sl))
+            if (!WIFEXITED(sl) || WEXITSTATUS(sl))
             {
                 printf(ANSI_COLOR_RED "Job #%i has failed!"ANSI_COLOR_RESET "\n", count);
                 break;
