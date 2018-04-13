@@ -53,17 +53,26 @@ int main(int argc, char const *argv[])
                 }
 
                 execvp(el.wlist[i].list[0], el.wlist[i].list);
-                err(el.wlist[i].list[0]);
                 _exit(EXIT_FAILURE);
             }
             if (i) close(fd[i-1][0]);
             if (i != el.length-1) close(fd[i][1]);            
         }
-        for (i = 0; i < el.length; i++) waitpid(child_pid[i], &sl, 0);
+        for (i = 0; i < el.length; i++)
+        {
+            if (waitpid(child_pid[i], &sl, 0) < 0) err(line);
+            if (WEXITSTATUS(sl))
+            {
+                printf(ANSI_COLOR_RED "Job #%i has failed!"ANSI_COLOR_RESET "\n", count);
+                break;
+            }
+        }
+        if (errno) break;
     }
 
 	if (line != NULL) free(line);
     fclose(fp);
+    if (errno) exit(EXIT_FAILURE);
 	exit(EXIT_SUCCESS);
 }
 
