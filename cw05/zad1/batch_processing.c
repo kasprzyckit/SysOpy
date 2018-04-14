@@ -15,10 +15,10 @@ void err(const char* msg);
 
 int main(int argc, char const *argv[])
 {
-	if (argc < 2) err("Too few arguments.");
+    if (argc < 2) err("Too few arguments.");
     
     int i;
-	FILE *fp;
+    FILE *fp;
     char *line = NULL;
     size_t len = 0;
     int sl, count = 0;
@@ -26,10 +26,10 @@ int main(int argc, char const *argv[])
     pid_t child_pid[MAX_ARG];
     exp_list el;
 
-	if ((fp = fopen(argv[1], "r")) == NULL) err(argv[1]);
+    if ((fp = fopen(argv[1], "r")) == NULL) err(argv[1]);
 
-	while (getline(&line, &len, fp) != -1)
-	{
+    while (getline(&line, &len, fp) != -1)
+    {
         printf(ANSI_COLOR_CYAN"\nin[%i]$" ANSI_COLOR_BLUE \
             " %s" ANSI_COLOR_RESET "\n", count++, line);
         el = tokenize(line);
@@ -70,10 +70,10 @@ int main(int argc, char const *argv[])
         if (errno) break;
     }
 
-	if (line != NULL) free(line);
+    if (line != NULL) free(line);
     fclose(fp);
     if (errno) exit(EXIT_FAILURE);
-	exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
 }
 
 void err(const char* msg)
