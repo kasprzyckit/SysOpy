@@ -45,6 +45,7 @@ exp_list tokenize(const char *text)
             if (i > r)
             {
                 el.wlist[j].length = i - r;
+                el.wlist[j].list[k] = NULL;
                 k = 0;
                 j++;
             }
@@ -54,7 +55,12 @@ exp_list tokenize(const char *text)
         el.wlist[j].list[k] = wl.list[i];
         k++;
     }
-    if (i > r) el.wlist[j++].length = i - r;
+    if (i > r)
+   	{
+   		el.wlist[j].length = i - r;
+   		el.wlist[j].list[k] = NULL;
+   		j++;
+   	}
     el.length = j;
 
     return el;
