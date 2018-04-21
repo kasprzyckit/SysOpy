@@ -39,7 +39,7 @@ int main(int argc, char const *argv[])
     set_sigint();
     atexit(__exit);
 
-    if ((msgqueue = msgget(ftok("./systemv.h", 0), IPC_CREAT | S_IRWXU | S_IRWXG | S_IRWXO)) < 0) err("Server queue open");
+    if ((msgqueue = msgget(ftok(getenv("HOME"), 0), IPC_CREAT | S_IRWXU | S_IRWXG | S_IRWXO)) < 0) err("Server queue open");
     
     for (;;)
     {

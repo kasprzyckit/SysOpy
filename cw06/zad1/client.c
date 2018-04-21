@@ -47,7 +47,7 @@ int main(int argc, char const *argv[])
     struct msgbuf msg;
     int count, pos, msg_id;
 
-    if ((server = msgget(ftok("./systemv.h", 0), 0)) < 0) err("Client->server queue");
+    if ((server = msgget(ftok(getenv("HOME"), 0), 0)) < 0) err("Client->server queue");
     if ((msgqueue = msgget(IPC_PRIVATE, S_IRWXU | S_IRWXG | S_IRWXO)) < 0) err("Server->client queue");
     
     connect_to_server();
