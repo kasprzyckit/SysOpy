@@ -12,7 +12,7 @@
 #define UNDEF_MSG   9
 
 #define MAX_MSG_TXT 100
-#define MAX_MSG     150
+#define MAX_MSG     sizeof(struct msgbuf)-sizeof(long)
 #define MAX_CLIENTS 2
 
 struct msgbuf 
