@@ -1,0 +1,5 @@
+add_executable(BarberP barber.c)
+add_executable(ClientP client.c)
+target_link_libraries(BarberP rt)
+target_link_libraries(ClientP rt)
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
