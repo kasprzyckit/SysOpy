@@ -1,7 +1,6 @@
 #ifndef __POS
 #define __POS
 
-#define ANSI_CYAN    "\x1b[36m"
 #define ANSI_BLUE    "\x1b[34m"
 #define ANSI_RED     "\x1b[91m"
 #define ANSI_MAGNETA "\x1b[35m"

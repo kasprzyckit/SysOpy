@@ -21,6 +21,60 @@ sem_t* cut_done;
 sem_t* seat_occupied;
 
 void sigexit(int sig) {exit(EXIT_FAILURE);}
+void err(const char* msg);
+void __exit(void);
+void init_resources(void);
+void print_msg(char* const msg, int id);
+
+void barber(int seats)
+{
+    msg_t msg;
+    sem_wait(shop_state);
+    if (bs->seats_free == seats)
+    {
+        print_msg("Barber goes to sleep\t\t", -1);
+        bs->is_asleep = 1;
+        sem_post(shop_state);
+        sem_wait(cust_present);
+        print_msg("Barber wakes up\t\t", -1);
+    }
+    else
+    {
+        read(fifo, &msg, sizeof(msg_t));
+        bs->served_customer = msg.id;
+        print_msg("Barber calls in\t\t", bs->served_customer);
+        // bs->seats_free += 1;     //1
+        sem_post(&(bs->prv[msg.sem]));
+        sem_post(shop_state);
+    }
+    sem_post(barb_ready);
+    sem_wait(cust_ready);
+    print_msg("Barber starts cutting\t", bs->served_customer);
+    print_msg("Barber ends cutting\t", bs->served_customer);
+    sem_post(cut_done);
+}
+
+int main(int argc, char const *argv[])
+{
+    if (argc < 2) err("Too few arguments!");
+    int seats = atoi(argv[1]);
+    if (seats <= 0) err("Invalid argumnt!");
+
+    atexit(__exit);
+    signal(SIGTERM, sigexit);
+    signal(SIGINT, sigexit);
+    signal(SIGSEGV, sigexit);
+    init_resources();
+    bs->seats_free = seats;
+
+    printf("Barber init\n");
+
+    while (1) barber(seats);
+
+
+    exit(EXIT_FAILURE);
+}
+
 
 void err(const char* msg)
 {
@@ -87,56 +141,8 @@ void print_msg(char* const msg, int id)
     sprintf(buff, "%s", msg);
     if (id != -1) sprintf(buff, "%s "ANSI_BLUE"%i"ANSI_RESET, buff, id);
     clock_gettime(CLOCK_MONOTONIC, &tp);
-    sprintf(buff, "%s :: "ANSI_MAGNETA"%ld:%ld"ANSI_RESET"\n", buff, tp.tv_sec, tp.tv_nsec);
+    sprintf(buff, "%s :: "ANSI_MAGNETA"%ld:%ld" \
+        ANSI_RESET"\n", buff, tp.tv_sec, tp.tv_nsec);
     printf("%s", buff);
     fflush(stdout);
-}
-
-void barber(int seats)
-{
-    msg_t msg;
-    sem_wait(shop_state);
-    if (bs->seats_free == seats)
-    {
-        print_msg("Barber goes to sleep\t\t", -1);
-        bs->is_asleep = 1;
-        sem_post(shop_state);
-        sem_wait(cust_present);
-        print_msg("Barber wakes up\t\t", -1);
-    }
-    else
-    {
-        read(fifo, &msg, sizeof(msg_t));
-        bs->served_customer = msg.id;
-        print_msg("Barber calls in\t\t", bs->served_customer);
-        bs->seats_free += 1;
-        sem_post(&(bs->prv[msg.sem]));
-        sem_post(shop_state);
-    }
-    sem_post(barb_ready);
-    sem_wait(cust_ready);
-    print_msg("Barber starts cutting\t", bs->served_customer);
-    print_msg("Barber ends cutting\t", bs->served_customer);
-    sem_post(cut_done);
-}
-
-int main(int argc, char const *argv[])
-{
-    if (argc < 2) err("Too few arguments!");
-    int seats = atoi(argv[1]);
-    if (seats <= 0) err("Invalid argumnt!");
-
-    atexit(__exit);
-    signal(SIGTERM, sigexit);
-    signal(SIGINT, sigexit);
-    signal(SIGSEGV, sigexit);
-    init_resources();
-    bs->seats_free = seats;
-
-    printf("Barber init\n");
-
-    while (1) barber(seats);
-
-
-    exit(EXIT_FAILURE);
 }
