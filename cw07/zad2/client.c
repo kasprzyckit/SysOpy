@@ -9,6 +9,7 @@
 #include <time.h>
 #include <signal.h>
 #include <errno.h>
+#include <sched.h>
 #include "posix.h"
 
 int fifo = 0;
@@ -31,7 +32,7 @@ int get_sem(void);
 void client(int cuts)
 {
     printf("Client "ANSI_BLUE"%i"ANSI_RESET" init\n", getpid());
-    int prvsem = get_sem();
+    int prvsem = get_sem(), count = 0;
     msg_t msg;
     msg.id = getpid();
     msg.sem = prvsem;
@@ -40,21 +41,25 @@ void client(int cuts)
         sem_wait(shop_state);
         if (bs->is_asleep)
         {
+        	count = 0;
             print_msg("Client wakes the barber\t\t");
             bs->is_asleep = 0;
             bs->served_customer = getpid();
             sem_post(cust_present);
             sem_post(shop_state);
+        	sem_wait(seat_occupied);        //2
         }
         else
         {
             if (bs->seats_free)
             {
+            	count = 0;
                 print_msg("Client enters the queue\t\t");
                 write(fifo, &msg, sizeof(msg_t));
                 bs->seats_free -= 1;
                 sem_post(shop_state);
                 sem_wait(&(bs->prv[prvsem]));
+        		sem_wait(seat_occupied);        //2
                 sem_wait(shop_state);       //1
                 bs->seats_free += 1;        //1
                 sem_post(shop_state);       //1
@@ -63,11 +68,12 @@ void client(int cuts)
             {
                 print_msg("Client leaves without a haircut\t");
                 sem_post(shop_state);
+            //    if (count > 50) sched_yield();
+            //    count++;
                 continue;
             }
         }
         sem_wait(barb_ready);
-        sem_wait(seat_occupied);        //2
         print_msg("Client takes the seat\t\t");
         sem_post(cust_ready);
         sem_wait(cut_done);
