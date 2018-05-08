@@ -68,8 +68,8 @@ void client(int cuts)
             {
                 print_msg("Client leaves without a haircut\t");
                 sem_post(shop_state);
-            //    if (count > 50) sched_yield();
-            //    count++;
+               if (count > 50) sched_yield();
+               count++;
                 continue;
             }
         }
