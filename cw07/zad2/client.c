@@ -20,6 +20,7 @@ sem_t* barb_ready;
 sem_t* cust_ready;
 sem_t* cut_done;
 sem_t* seat_occupied;
+sem_t* queue_seat;
 
 void sigexit(int sig) {exit(EXIT_FAILURE);}
 
@@ -36,7 +37,7 @@ void client(int cuts)
     msg_t msg;
     msg.id = getpid();
     msg.sem = prvsem;
-    for (; cuts > 0;)
+    while (cuts > 0)
     {
         sem_wait(shop_state);
         if (bs->is_asleep)
@@ -45,40 +46,45 @@ void client(int cuts)
             print_msg("Client wakes the barber\t\t");
             bs->is_asleep = 0;
             bs->served_customer = getpid();
+            sem_wait(queue_seat);
             sem_post(cust_present);
             sem_post(shop_state);
-        	sem_wait(seat_occupied);        //2
         }
         else
         {
             if (bs->seats_free)
             {
+                sem_wait(queue_seat);
             	count = 0;
                 print_msg("Client enters the queue\t\t");
                 write(fifo, &msg, sizeof(msg_t));
                 bs->seats_free -= 1;
+                sem_post(queue_seat);
                 sem_post(shop_state);
                 sem_wait(&(bs->prv[prvsem]));
-        		sem_wait(seat_occupied);        //2
-                sem_wait(shop_state);       //1
-                bs->seats_free += 1;        //1
-                sem_post(shop_state);       //1
+                sem_wait(shop_state);
+                sem_wait(queue_seat);
+                bs->seats_free += 1;
+                sem_post(shop_state);
             }
             else
             {
                 print_msg("Client leaves without a haircut\t");
                 sem_post(shop_state);
-               if (count > 50) sched_yield();
-               count++;
+                if (count > 50) sched_yield();
+                else count++;
                 continue;
             }
         }
+        sem_wait(seat_occupied);
         sem_wait(barb_ready);
         print_msg("Client takes the seat\t\t");
+        sem_post(queue_seat);
         sem_post(cust_ready);
         sem_wait(cut_done);
         print_msg("Client leaves with a haircut\t");
-        sem_post(seat_occupied);        //2
+        sem_post(seat_occupied);
+        sem_post(cust_ready);
         cuts--;
     }
 
@@ -114,13 +120,10 @@ int main(int argc, char const *argv[])
 
 void print_msg(char* const msg)
 {
-    char buff[100];
     struct timespec tp;
-    sprintf(buff, "%s "ANSI_BLUE"%i"ANSI_RESET, msg, getpid());
     clock_gettime(CLOCK_MONOTONIC, &tp);
-    sprintf(buff, "%s :: "ANSI_MAGNETA"%ld:%ld" \
-        ANSI_RESET"\n", buff, tp.tv_sec, tp.tv_nsec);
-    printf("%s", buff);
+    printf("%s "ANSI_BLUE"%i"ANSI_RESET" :: "ANSI_MAGNETA"%ld:%ld" \
+        ANSI_RESET"\n", msg, getpid(), tp.tv_sec, tp.tv_nsec);
     fflush(stdout);
 }
 
@@ -147,6 +150,7 @@ void init_resources(void)
     cust_ready = sem_open(SEM_CREAD, 0);
     cut_done = sem_open(SEM_CUT, 0);
     seat_occupied = sem_open(SEM_SEAT, 0);
+    queue_seat = sem_open(QUE_SEAT, 0);
 }
 
 void err(const char* msg)
@@ -166,4 +170,5 @@ void __exit(void)
     sem_close(cust_ready);
     sem_close(cut_done);
     sem_close(seat_occupied);
+    sem_close(queue_seat);
 }

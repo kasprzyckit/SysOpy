@@ -19,6 +19,7 @@ sem_t* barb_ready;
 sem_t* cust_ready;
 sem_t* cut_done;
 sem_t* seat_occupied;
+sem_t* queue_seat;
 
 void sigexit(int sig) {exit(EXIT_FAILURE);}
 void err(const char* msg);
@@ -43,7 +44,6 @@ void barber(int seats)
         read(fifo, &msg, sizeof(msg_t));
         bs->served_customer = msg.id;
         print_msg("Barber calls in\t\t", bs->served_customer);
-        // bs->seats_free += 1;     //1
         sem_post(&(bs->prv[msg.sem]));
         sem_post(shop_state);
     }
@@ -52,6 +52,7 @@ void barber(int seats)
     print_msg("Barber starts cutting\t", bs->served_customer);
     print_msg("Barber ends cutting\t", bs->served_customer);
     sem_post(cut_done);
+    sem_wait(cust_ready);
 }
 
 int main(int argc, char const *argv[])
@@ -97,12 +98,14 @@ void __exit(void)
     sem_close(cust_ready);
     sem_close(cut_done);
     sem_close(seat_occupied);
+    sem_close(queue_seat);
     sem_unlink(SEM_SHOP);
     sem_unlink(SEM_CPRES);
     sem_unlink(SEM_BREAD);
     sem_unlink(SEM_CREAD);
     sem_unlink(SEM_CUT);
     sem_unlink(SEM_SEAT);
+    sem_unlink(QUE_SEAT);
 }
 
 void init_resources(void)
@@ -132,6 +135,7 @@ void init_resources(void)
     cust_ready = sem_open(SEM_CREAD, O_CREAT, 0777, 0);
     cut_done = sem_open(SEM_CUT, O_CREAT, 0777, 0);
     seat_occupied = sem_open(SEM_SEAT, O_CREAT, 0777, 1);
+    queue_seat = sem_open(QUE_SEAT, O_CREAT, 0777, 1);
 }
 
 void print_msg(char* const msg, int id)

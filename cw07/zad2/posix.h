@@ -31,5 +31,6 @@ typedef struct
 #define SEM_CREAD "/cread_sem"
 #define SEM_CUT "/cut_sem"
 #define SEM_SEAT "/seat_sem"
+#define QUE_SEAT "/queue_sem"
 
 #endif
