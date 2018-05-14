@@ -38,6 +38,7 @@ typedef struct
 #define SEM_CREAD   3
 #define SEM_CUT     4
 #define SEM_SEAT    5
+#define QUE_SEAT    6
 
 #define SEMWAIT(semid, sem) sems[0].sem_num = sem; \
     sems[0].sem_op = -1; \
@@ -46,5 +47,17 @@ typedef struct
 #define SEMPOST(semid, sem) sems[0].sem_num = sem; \
     sems[0].sem_op = 1; \
     semop(semid, sems, 1);
+
+#define SEMWAIT2(semid, sem1, sem2) sems[0].sem_num = sem1; \
+        sems[0].sem_op = -1; \
+        sems[1].sem_num = sem2; \
+        sems[1].sem_op = -1; \
+        semop(semid, sems, 2);
+
+#define SEMPOST2(semid, sem1, sem2) sems[0].sem_num = sem1; \
+        sems[0].sem_op = 1; \
+        sems[1].sem_num = sem2; \
+        sems[1].sem_op = 1; \
+        semop(semid, sems, 2);
 
 #endif

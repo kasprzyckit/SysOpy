@@ -40,22 +40,22 @@ void client(int cuts)
             print_msg("Client wakes the barber\t\t");
             bs->is_asleep = 0;
             bs->served_customer = getpid();
-            sems[0].sem_num = SEM_SHOP; sems[0].sem_op = 1;
-            sems[1].sem_num = SEM_CPRES; sems[1].sem_op = 1;
-            semop(semid, sems, 2);
+            SEMWAIT(semid, QUE_SEAT)
+            SEMPOST2(semid, SEM_SHOP, SEM_CPRES)
         }
         else
         {
             if (bs->seats_free)
             {
+                SEMWAIT(semid, QUE_SEAT)
                 print_msg("Client enters the queue\t\t");
                 write(fifo, &msg, sizeof(msg_t));
                 bs->seats_free -= 1;
-                SEMPOST(semid, SEM_SHOP)
+                SEMPOST2(semid, SEM_SHOP, QUE_SEAT)
                 SEMWAIT(semprv, prvsem)
-                SEMWAIT(semid, SEM_SHOP)    //1
-                bs->seats_free += 1;        //1
-                SEMPOST(semid, SEM_SHOP)    //1
+                SEMWAIT2(semid, SEM_SHOP, QUE_SEAT)
+                bs->seats_free += 1;
+                SEMPOST(semid, SEM_SHOP)
             }
             else
             {
@@ -64,14 +64,12 @@ void client(int cuts)
                 continue;
             }
         }
-        sems[0].sem_num = SEM_BREAD; sems[0].sem_op = -1;
-        sems[1].sem_num = SEM_SEAT; sems[1].sem_op = -1;    //2
-        semop(semid, sems, 2);
+        SEMWAIT2(semid, SEM_BREAD, SEM_SEAT)
         print_msg("Client takes the seat\t\t");
-        SEMPOST(semid, SEM_CREAD)
+        SEMPOST2(semid, QUE_SEAT, SEM_CREAD)
         SEMWAIT(semid, SEM_CUT)
         print_msg("Client leaves with a haircut\t");
-        SEMPOST(semid, SEM_SEAT)                            //2
+        SEMPOST2(semid, SEM_CREAD, SEM_SEAT)
         cuts--;
     }
 

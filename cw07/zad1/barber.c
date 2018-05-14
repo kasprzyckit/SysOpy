@@ -40,7 +40,6 @@ void barber(int seats)
         read(fifo, &msg, sizeof(msg_t));
         bs->served_customer = msg.id;
         print_msg("Barber calls in\t\t", bs->served_customer);
-        // bs->seats_free += 1;     //1
         SEMPOST(semprv, msg.sem)
         SEMPOST(semid, SEM_SHOP)
     }
@@ -49,6 +48,7 @@ void barber(int seats)
     print_msg("Barber starts cutting\t", bs->served_customer);
     print_msg("Barber ends cutting\t", bs->served_customer);
     SEMPOST(semid, SEM_CUT)
+    SEMWAIT(semid, SEM_CREAD)
 }
 
 int main(int argc, char const *argv[])
@@ -105,7 +105,7 @@ void init_resources(void)
     bs->is_asleep = 0;
     bs->top = 0;
 
-    if ((semid = semget(ftok(SPATH, 1), 6, \
+    if ((semid = semget(ftok(SPATH, 1), 7, \
         IPC_CREAT | S_IRWXU | S_IRWXG | S_IRWXO)) < 0) err("Semget");
     if ((semprv = semget(ftok(SPATH, 2), MAX_CLIENTS, \
         IPC_CREAT | S_IRWXU | S_IRWXG | S_IRWXO)) < 0) err("Semget");
@@ -114,6 +114,7 @@ void init_resources(void)
     arg.val = 1;
     semctl(semid, SEM_SHOP, SETVAL, arg);
     semctl(semid, SEM_SEAT, SETVAL, arg);
+    semctl(semid, QUE_SEAT, SETVAL, arg);
     arg.val = 0;
     semctl(semid, SEM_CPRES, SETVAL, arg);
     semctl(semid, SEM_BREAD, SETVAL, arg);
