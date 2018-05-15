@@ -28,9 +28,9 @@ void print_msg(char* const msg, int id);
 
 msg_t msg_rcv()
 {
-    if (bs->top_q == 0) bs->top_q = MAX_CLIENTS-1;
-    else bs->top_q--;
-    msg_t msg = bs->fifo[bs->top_q];
+    msg_t msg = bs->fifo[bs->rear_q];
+    if (bs->rear_q == MAX_CLIENTS-1) bs->rear_q = 0;
+    else bs->rear_q++;
     return msg;
 }
 
@@ -126,6 +126,7 @@ void init_resources(void)
     bs->is_asleep = 0;
     bs->top = 0;
     bs->top_q = 0;
+    bs->rear_q = 0;
     for(i = 0; i<MAX_CLIENTS; i++) sem_init(&(bs->prv[i]), 1, 0);
 
     shop_state = sem_open(SEM_SHOP, O_CREAT, 0777, 1);

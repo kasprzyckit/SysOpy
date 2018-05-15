@@ -23,6 +23,7 @@ typedef struct
     int top;
     msg_t fifo[MAX_CLIENTS];
     int top_q;
+    int rear_q;
 } barber_state;
 
 #define FIFO_PATH "fifo"
