@@ -11,7 +11,6 @@
 #include <time.h>
 #include "posix.h"
 
-int fifo = 0;
 barber_state* bs;
 sem_t* shop_state;
 sem_t* cust_present;
@@ -27,6 +26,14 @@ void __exit(void);
 void init_resources(void);
 void print_msg(char* const msg, int id);
 
+msg_t msg_rcv()
+{
+    if (bs->top_q == 0) bs->top_q = MAX_CLIENTS-1;
+    else bs->top_q--;
+    msg_t msg = bs->fifo[bs->top_q];
+    return msg;
+}
+
 void barber(int seats)
 {
     msg_t msg;
@@ -41,7 +48,7 @@ void barber(int seats)
     }
     else
     {
-        read(fifo, &msg, sizeof(msg_t));
+        msg = msg_rcv();
         bs->served_customer = msg.id;
         print_msg("Barber calls in\t\t", bs->served_customer);
         sem_post(&(bs->prv[msg.sem]));
@@ -86,8 +93,6 @@ void err(const char* msg)
 
 void __exit(void)
 {
-    if (fifo) close(fifo);
-    unlink(FIFO_PATH);
     int i;
     for(i = 0; i<MAX_CLIENTS; i++) sem_destroy(&(bs->prv[i]));
     munmap(bs, sizeof(barber_state));
@@ -110,15 +115,8 @@ void __exit(void)
 
 void init_resources(void)
 {
-    if (mkfifo(FIFO_PATH, S_IRWXU | S_IRWXG | S_IRWXO) < 0) 
-    {
-        if (errno == EEXIST) errno = 0;
-        else err("Barber make pipe");
-    }
-
     int ss, i;
 
-    if ((fifo = open(FIFO_PATH, O_RDONLY | O_NONBLOCK)) < 0) err("Barber pipe");
     if ((ss = shm_open(BARBER_SHARED, O_RDWR | O_CREAT, \
         S_IRWXU | S_IRWXG | S_IRWXO)) < 0) err("Shared segment");
     if (ftruncate(ss, sizeof(barber_state)) < 0) err("Ftruncate");
@@ -127,6 +125,7 @@ void init_resources(void)
     close(ss);
     bs->is_asleep = 0;
     bs->top = 0;
+    bs->top_q = 0;
     for(i = 0; i<MAX_CLIENTS; i++) sem_init(&(bs->prv[i]), 1, 0);
 
     shop_state = sem_open(SEM_SHOP, O_CREAT, 0777, 1);

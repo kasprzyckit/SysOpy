@@ -12,7 +12,6 @@
 #include <sched.h>
 #include "posix.h"
 
-int fifo = 0;
 barber_state* bs;
 sem_t* shop_state;
 sem_t* cust_present;
@@ -29,6 +28,13 @@ void __exit(void);
 void init_resources(void);
 void print_msg(char* const msg);
 int get_sem(void);
+
+void msg_snd(msg_t msg)
+{
+    bs->fifo[bs->top_q] = msg;
+    if (bs->top_q == MAX_CLIENTS-1) bs->top_q = 0;
+    else bs->top_q++;
+}
 
 void client(int cuts)
 {
@@ -57,7 +63,7 @@ void client(int cuts)
                 sem_wait(queue_seat);
             	count = 0;
                 print_msg("Client enters the queue\t\t");
-                write(fifo, &msg, sizeof(msg_t));
+                msg_snd(msg);
                 bs->seats_free -= 1;
                 sem_post(queue_seat);
                 sem_post(shop_state);
@@ -138,7 +144,6 @@ void init_resources(void)
 {
     int ss;
     
-    if ((fifo = open(FIFO_PATH, O_WRONLY)) < 0) err("Client pipe");
     if ((ss = shm_open(BARBER_SHARED, O_RDWR, 0)) < 0) err("Shared segment");
     if ((bs = (barber_state*) mmap(NULL, sizeof(barber_state), \
         PROT_READ | PROT_WRITE, MAP_SHARED, ss, 0)) < 0) err("MMap");
@@ -162,7 +167,6 @@ void err(const char* msg)
 
 void __exit(void)
 {
-    if (fifo) close(fifo);
     munmap(bs, sizeof(barber_state));
     sem_close(shop_state);
     sem_close(cust_present);

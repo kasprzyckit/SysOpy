@@ -10,18 +10,20 @@
 
 typedef struct
 {
+    pid_t id;
+    int sem;
+} msg_t;
+
+typedef struct
+{
     short is_asleep;
     int seats_free;
     pid_t served_customer;
     sem_t prv[MAX_CLIENTS];
     int top;
+    msg_t fifo[MAX_CLIENTS];
+    int top_q;
 } barber_state;
-
-typedef struct
-{
-    pid_t id;
-    int sem;
-} msg_t;
 
 #define FIFO_PATH "fifo"
 #define BARBER_SHARED "/barber_so"
