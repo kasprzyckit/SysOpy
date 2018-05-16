@@ -21,11 +21,53 @@ unsigned char** img = NULL;
 float** filter = NULL;
 unsigned char** out = NULL;
 
-void err(const char* msg)
+void parse_pgm();
+void parse_filter();
+void* filter_pgm(void *number);
+void write_pgm(unsigned char** im, int w, int h);
+void print_times(struct timespec* ts, struct timespec* te);
+void err(const char* msg);
+void __exit();
+
+int main(int argc, char const *argv[])
 {
-    if (errno) perror(msg);
-    else printf(ANSI_RED"%s\n"ANSI_RESET, msg);
-    exit(EXIT_FAILURE);
+    if (argc < 5) err("Too few arguments!");
+    thrs = atoi(argv[1]);
+    if (thrs <= 0) err("Incorrect number of threads!");
+
+    atexit(__exit);
+
+    if ((inf = fopen(argv[2], "r")) < 0) err("In file");
+    if ((filterf = fopen(argv[3], "r")) < 0) err("filter");
+    if ((outf = fopen(argv[4], "w")) < 0) err("Out file");
+    
+    parse_pgm();
+    parse_filter();
+
+    int i;
+    out = (unsigned char**) malloc(hg * sizeof(unsigned char*));
+    for (i = 0; i<hg; i++) out[i] = (unsigned char*) malloc(wd * sizeof(unsigned char));
+
+    int *num;
+    struct timespec tstart, tend;
+    pthread_t* threads = (pthread_t*) malloc(thrs * sizeof(pthread_t));
+
+
+    clock_gettime(CLOCK_MONOTONIC, &tstart);
+    for (i = 0; i < thrs; i++)
+    {
+        num = (int*) malloc(sizeof(int));
+        *num = i;
+        if (pthread_create(&threads[i], NULL, &filter_pgm, (void*)num)) err("Thread");
+    }
+    for (i = 0; i<thrs; i++) if (pthread_join(threads[i], NULL)) err("Thread join");
+    free(threads);
+    clock_gettime(CLOCK_MONOTONIC, &tend);
+
+    print_times(&tstart, &tend);
+    write_pgm(out, wd, hg);
+
+    exit(EXIT_SUCCESS);
 }
 
 void parse_pgm()
@@ -41,13 +83,13 @@ void parse_pgm()
     hg = atoi(buff + off + 1);
     getline(&buff, &n, inf);
 
-    img = malloc(hg * sizeof(unsigned char*));
+    img = (unsigned char**) malloc(hg * sizeof(unsigned char*));
 
     while ((count = getline(&buff, &n, inf)) > 0)
     {
         for (off = 0; off < count-1;)
         {
-            if (j == 0) img[i] = malloc(wd * sizeof(unsigned char));
+            if (j == 0) img[i] = (unsigned char*) malloc(wd * sizeof(unsigned char));
             img[i][j++] = (unsigned char) atoi(buff + off);
             if (j == wd) {j = 0; i++;}
             while (! isspace(buff[off]) && off < count) off++;
@@ -68,13 +110,13 @@ void parse_filter()
     getline(&buff, &n, filterf);
     c = atoi(buff);
 
-    filter = malloc(c * sizeof(float*));
+    filter = (float**) malloc(c * sizeof(float*));
 
     while ((count = getline(&buff, &n, filterf)) > 0)
     {
         for (off = 0; off < count-1;)
         {
-            if (j == 0) filter[i] = malloc(c * sizeof(float));
+            if (j == 0) filter[i] = (float*) malloc(c * sizeof(float));
             filter[i][j++] = atof(buff + off);
             if (j == c) {j = 0; i++;}
             while (! isspace(buff[off]) && off < count) off++;
@@ -83,29 +125,6 @@ void parse_filter()
     }
 
     free(buff);
-}
-
-void __exit()
-{
-    fclose(inf);
-    fclose(filterf);
-    fclose(outf);
-    int i;
-    if (img != NULL)
-    {
-        for(i=0;i<hg;i++) free(img[i]);
-        free(img);
-    }
-    if (filter != NULL)
-    {
-        for(i=0;i<c;i++) free(filter[i]);
-        free(filter);
-    }
-    if (out != NULL)
-    {
-        for(i=0;i<hg;i++) free(out[i]);
-        free(out);
-    }
 }
 
 void* filter_pgm(void *number)
@@ -173,43 +192,32 @@ void print_times(struct timespec* ts, struct timespec* te)
         ANSI_MAGNETA"Time measured: %ld sec %ld nsec\n"ANSI_RESET, hg, wd, c, thrs, s, n);
 }
 
-int main(int argc, char const *argv[])
+void err(const char* msg)
 {
-    if (argc < 5) err("Too few arguments!");
-    thrs = atoi(argv[1]);
-    if (thrs <= 0) err("Incorrect number of threads!");
+    if (errno) perror(msg);
+    else printf(ANSI_RED"%s\n"ANSI_RESET, msg);
+    exit(EXIT_FAILURE);
+}
 
-    atexit(__exit);
-
-    if ((inf = fopen(argv[2], "r")) < 0) err("In file");
-    if ((filterf = fopen(argv[3], "r")) < 0) err("filter");
-    if ((outf = fopen(argv[4], "w")) < 0) err("Out file");
-    
-    parse_pgm();
-    parse_filter();
-
+void __exit()
+{
+    fclose(inf);
+    fclose(filterf);
+    fclose(outf);
     int i;
-    out = malloc(hg * sizeof(unsigned char*));
-    for (i = 0; i<hg; i++) out[i] = malloc(wd * sizeof(unsigned char));
-
-    int *num;
-    struct timespec tstart, tend;
-    pthread_t* threads = malloc(thrs * sizeof(pthread_t));
-
-
-    clock_gettime(CLOCK_MONOTONIC, &tstart);
-    for (i = 0; i < thrs; i++)
+    if (img != NULL)
     {
-        num = malloc(sizeof(int));
-        *num = i;
-        if (pthread_create(&threads[i], NULL, &filter_pgm, (void*)num)) err("Thread");
+        for(i=0;i<hg;i++) free(img[i]);
+        free(img);
     }
-    for (i = 0; i<thrs; i++) if (pthread_join(threads[i], NULL)) err("Thread join");
-    free(threads);
-    clock_gettime(CLOCK_MONOTONIC, &tend);
-
-    print_times(&tstart, &tend);
-    write_pgm(out, wd, hg);
-
-    exit(EXIT_SUCCESS);
+    if (filter != NULL)
+    {
+        for(i=0;i<c;i++) free(filter[i]);
+        free(filter);
+    }
+    if (out != NULL)
+    {
+        for(i=0;i<hg;i++) free(out[i]);
+        free(out);
+    }
 }
