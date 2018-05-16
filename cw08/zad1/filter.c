@@ -61,8 +61,8 @@ int main(int argc, char const *argv[])
         if (pthread_create(&threads[i], NULL, &filter_pgm, (void*)num)) err("Thread");
     }
     for (i = 0; i<thrs; i++) if (pthread_join(threads[i], NULL)) err("Thread join");
-    free(threads);
     clock_gettime(CLOCK_MONOTONIC, &tend);
+    free(threads);
 
     print_times(&tstart, &tend);
     write_pgm(out, wd, hg);
@@ -75,7 +75,7 @@ void parse_pgm()
     char *buff;
     size_t n = 0;
     ssize_t count;
-    int off = 0, i = 0, j = 0;
+    int off = 0, i = 0, j = 0, flag = 0;
 
     getline(&buff, &n, inf); getline(&buff, &n, inf);
     wd = atoi(buff);
@@ -91,11 +91,16 @@ void parse_pgm()
         {
             if (j == 0) img[i] = (unsigned char*) malloc(wd * sizeof(unsigned char));
             img[i][j++] = (unsigned char) atoi(buff + off);
-            if (j == wd) {j = 0; i++;}
+            if (j == wd)
+            {
+                j = 0; 
+                i++; 
+                if (i == hg) {flag = 1; break;}
+            }
             while (! isspace(buff[off]) && off < count) off++;
             while (isspace(buff[off]) && off < count) off++;
         }
-        if (i == hg) break;
+        if (flag) break;
     }
     free(buff);
 }
