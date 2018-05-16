@@ -14,6 +14,7 @@ zad2/CMakeFiles/
 *.internal
 *.includecache
 *.marks
+*.pgm
 
 # Prerequisites
 *.d
