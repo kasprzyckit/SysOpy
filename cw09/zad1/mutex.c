@@ -37,7 +37,7 @@ void load_configuration(char* const filepath);
 void __exit();
 void consumer_out(char* buff, int ind);
 
-void* producent(void* arg)
+void* producer(void* arg)
 {
     char* buff = NULL;
     size_t n = 0;
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
    buffer = malloc(buff_size * sizeof(char*));
 
-    for (i = 0; i<prs_s; i++) if (pthread_create(&prods[i], NULL, &producent, NULL)) err("Producent thread");
+    for (i = 0; i<prs_s; i++) if (pthread_create(&prods[i], NULL, &producer, NULL)) err("producer thread");
     for (i = 0; i<cons_s; i++) if (pthread_create(&cons[i], NULL, &consumer, NULL)) err("Consumer thread");
 
     if (nk) alarm(nk);
