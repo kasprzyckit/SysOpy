@@ -77,7 +77,7 @@ void* consumer(void* arg)
         buff = buffer[read_ind];
         buffer[read_ind] = NULL;
 
-        if (print_mode == PALL) printf(ANSI_CYAN"Consument reads a line from "ANSI_BLUE"%i "ANSI_GREEN"\t%i / %i\n"ANSI_RESET, read_ind, count-1, buff_size);
+        if (print_mode == PALL) printf(ANSI_CYAN"consumer reads a line from "ANSI_BLUE"%i "ANSI_GREEN"\t%i / %i\n"ANSI_RESET, read_ind, count-1, buff_size);
         consumer_out(buff, read_ind);
 
         read_ind = (read_ind+1)%buff_size;
