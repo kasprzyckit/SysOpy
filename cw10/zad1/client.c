@@ -19,10 +19,6 @@
 #include "../calc.h"
 
 #define ANSI_RED     "\x1b[91m"
-#define ANSI_CYAN    "\x1b[36m"
-#define ANSI_BLUE    "\x1b[34m"
-#define ANSI_GREEN   "\x1b[32m"
-#define ANSI_MAGNETA "\x1b[35m"
 #define ANSI_RESET   "\x1b[0m"
 
 char name[MAX_MSG];
@@ -30,26 +26,65 @@ int mode;
 struct sockaddr* server_address = NULL;
 int server_fd;
 
-void* network(void *arg);
-void init_connection(void);
-void parse_args(int argc, char const *argv[]);
-void __exit(void);
-void err(const char* msg);
+void*   network(void *arg);
+int     calculate(char* msg);
+int     send_packet(msg_t msg_type, char* msg, int cnt);
+void    init_connection(void);
+void    parse_args(int argc, char const *argv[]);
+void    __exit(void);
+void    err(const char* msg);
 
-int send_packet(msg_t msg_type, char* msg)
+void* network(void *arg)
 {
-    void *buff;
+    char buff[MAX_MSG];
     packet_t pck;
-    pck.msg_type = msg_type;
-    pck.msg_length = strlen(msg) + 1;
 
-    buff = malloc(sizeof(packet_t) + pck.msg_length);
-    memcpy(buff, &pck, sizeof(packet_t));
-    memcpy(buff+sizeof(packet_t), msg, pck.msg_length);
+    for (;;)
+    {
+        read(server_fd, &pck, sizeof(packet_t));
+        read(server_fd, buff, pck.msg_length);
 
-    if (write(server_fd, buff, 
-        sizeof(packet_t) + pck.msg_length) < 0) return -1;
-    return 0;
+        switch(pck.msg_type)
+        {
+            case SERVER_PING:
+                send_packet(CLIENT_PONG, "Pong", -1);
+                break;
+            case SERVER_CALC:
+                printf("Calculating [%i]\n", pck.c_count);
+                if(calculate(buff)) send_packet(CLIENT_ANSW, buff, pck.c_count);
+                else
+                {
+                    sprintf(buff, "Incorrect calculation!");
+                    send_packet(CLIENT_ERR, buff, -1);
+                }
+                break;
+            default:
+                break;            
+        }
+    }
+
+    return (void*) 0;
+}
+
+int main(int argc, char const *argv[])
+{
+    parse_args(argc, argv);
+
+    atexit(__exit);
+    init_connection();
+
+    sigset_t set;
+    int sig;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
+    pthread_t pth;
+    pthread_create(&pth, NULL, &network, NULL);
+
+    sigwait(&set, &sig);
+    pthread_cancel(pth);
+    exit(EXIT_SUCCESS);
 }
 
 int calculate(char* msg)
@@ -82,55 +117,21 @@ int calculate(char* msg)
     return 1;
 }
 
-void* network(void *arg)
+int send_packet(msg_t msg_type, char* msg, int cnt)
 {
-    char buff[MAX_MSG];
+    void *buff;
     packet_t pck;
+    pck.msg_type = msg_type;
+    pck.msg_length = strlen(msg) + 1;
+    pck.c_count = cnt;
 
-    for (;;)
-    {
-        read(server_fd, &pck, sizeof(packet_t));
-        read(server_fd, buff, pck.msg_length);
+    buff = malloc(sizeof(packet_t) + pck.msg_length);
+    memcpy(buff, &pck, sizeof(packet_t));
+    memcpy(buff+sizeof(packet_t), msg, pck.msg_length);
 
-        switch(pck.msg_type)
-        {
-            case SERVER_PING:
-                send_packet(CLIENT_PONG, "Pong");
-                break;
-            case SERVER_CALC:
-                if (calculate(buff)) send_packet(CLIENT_ANSW, buff);
-                else
-                {
-                    sprintf(buff, "Incorrect calculation!");
-                    send_packet(CLIENT_ERR, buff);
-                }
-                break;
-            default:
-                break;            
-        }
-    }
-    return (void*) 0;
-}
-
-int main(int argc, char const *argv[])
-{
-    parse_args(argc, argv);
-
-    atexit(__exit);
-    init_connection();
-
-    sigset_t set;
-    int sig;
-    sigemptyset(&set);
-    sigaddset(&set, SIGINT);
-    pthread_sigmask(SIG_BLOCK, &set, NULL);
-
-    pthread_t pth;
-    pthread_create(&pth, NULL, &network, NULL);
-
-    sigwait(&set, &sig);
-    pthread_cancel(pth);
-    exit(EXIT_SUCCESS);
+    if (write(server_fd, buff, 
+        sizeof(packet_t) + pck.msg_length) < 0) return -1;
+    return 0;
 }
 
 void init_connection(void)
@@ -153,7 +154,7 @@ void init_connection(void)
             err("UNIX connection to server");
     }
 
-    send_packet(CLIENT_REGISTER, name);
+    send_packet(CLIENT_REGISTER, name, -1);
 
     read(server_fd, &pck, sizeof(packet_t));
     read(server_fd, buff, pck.msg_length);
@@ -194,7 +195,7 @@ void parse_args(int argc, char const *argv[])
 
 void __exit(void)
 {
-    send_packet(CLIENT_UNREG, name);
+    send_packet(CLIENT_UNREG, name, -1);
     shutdown(server_fd, SHUT_RDWR);
     close(server_fd);
     if (server_address != NULL) free(server_address);

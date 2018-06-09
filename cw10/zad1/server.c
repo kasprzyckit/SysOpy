@@ -21,10 +21,7 @@
 #include "../calc.h"
 
 #define ANSI_RED     "\x1b[91m"
-#define ANSI_CYAN    "\x1b[36m"
 #define ANSI_BLUE    "\x1b[34m"
-#define ANSI_GREEN   "\x1b[32m"
-#define ANSI_MAGNETA "\x1b[35m"
 #define ANSI_RESET   "\x1b[0m"
 
 #define MAX_EVENTS      40
@@ -35,51 +32,33 @@ char socket_path[UNIX_PATH_MAX];
 int inet_socket, unix_socket;
 client_list clist;
 pthread_mutex_t list_mutex = PTHREAD_MUTEX_INITIALIZER;
+int counter = 0;
 
-void* terminal(void *arg);
-void* network(void *arg);
-void* clients_ping(void *arg);
-void init_socket(void);
-void parse_args(int argc, char const *argv[]);
-void __exit(void);
-void err(const char* msg);
-
-int setnoblocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1)
-        return 0;
-    flags |= O_NONBLOCK;
-    return fcntl(fd, F_SETFL, flags) != -1;
-}
-
-int send_packet(int client_fd, msg_t msg_type, char* msg)
-{
-    void *buff;
-    packet_t pck;
-    pck.msg_type = msg_type;
-    pck.msg_length = strlen(msg) + 1;
-
-    buff = malloc(sizeof(packet_t) + pck.msg_length);
-    memcpy(buff, &pck, sizeof(packet_t));
-    memcpy(buff+sizeof(packet_t), msg, pck.msg_length);
-    if (write(client_fd, buff, 
-        sizeof(packet_t) + pck.msg_length) < 0) return -1;
-    return 0;
-}
+int     accept_client(int server_fd);
+void    accept_message(int client_fd);
+void    close_socket(int socket_fd);
+int     send_packet(int client_fd, msg_t msg_type, char* msg, int cnt);
+void    parse_args(int argc, char const *argv[]);
+void    init_socket(void);
+void    __exit(void);
+void    err(const char* msg);
 
 void* terminal(void *arg)
 {
     char* line = NULL;
     size_t n = 0;
     int count;
-        printf("> ");
+    printf(ANSI_BLUE"0> "ANSI_RESET);
     for (;;)
     {
         count = getline(&line, &n, stdin);
         line[count-1] = '\0';
 
         pthread_mutex_lock(&list_mutex);
-        send_packet(get_next_fd(&clist), SERVER_CALC, line);
+        if (clist.size > 0)
+            send_packet(get_next_fd(&clist), SERVER_CALC, line, counter++);
+        else printf(ANSI_RED"No clients connected!" \
+            ANSI_BLUE"\n%i> "ANSI_RESET, counter);
         pthread_mutex_unlock(&list_mutex);
 
         free(line);
@@ -89,86 +68,6 @@ void* terminal(void *arg)
     return (void*) 0;
 }
 
-void close_socket(int socket_fd)
-{
-    shutdown(socket_fd, SHUT_RDWR);
-    close(socket_fd);
-}
-
-int accept_client(int server_fd)
-{
-    int client_fd;
-    packet_t pck;
-    char buff[MAX_MSG];
-
-    if ((client_fd = accept(server_fd, NULL, NULL)) < 0) return 0;
-    read(client_fd, &pck, sizeof(packet_t));
-    read(client_fd, buff, pck.msg_length);
-
-    pthread_mutex_lock(&list_mutex);
-
-    if (clist.size >= MAX_CLIENTS)
-    {
-        pthread_mutex_unlock(&list_mutex);
-
-        send_packet(client_fd, SERVER_REJECT, "Server full");
-        close_socket(client_fd);
-        return 0;
-    } 
-    if (is_present_clist(&clist, buff))
-    {
-        pthread_mutex_unlock(&list_mutex);
-
-        send_packet(client_fd, SERVER_REJECT, "Name already in use");
-        close_socket(client_fd);
-        return 0;
-    }
-
-    add_clist(&clist, client_fd, buff);
-
-    pthread_mutex_unlock(&list_mutex);
-
-    if(send_packet(client_fd, SERVER_ACCEPT, "CALC cluster server: welcome!")<0)
-        return 0;
-    return client_fd;
-}
-
-void accept_message(int client_fd)
-{
-    packet_t pck;
-    char buff[MAX_MSG];
-    int t;
-    if ((t = read(client_fd, &pck, sizeof(packet_t))) <= 0) return;
-    if ((t = read(client_fd, buff, pck.msg_length)) <= 0) return;
-    switch(pck.msg_type)
-    {
-        case CLIENT_PONG:
-            pthread_mutex_lock(&list_mutex);
-
-            confirm_ping(&clist, client_fd);
-
-            pthread_mutex_unlock(&list_mutex);
-            break;
-        case CLIENT_ANSW:
-            printf("%s\n> ", buff);
-            fflush(stdout);
-            break;
-        case CLIENT_ERR:
-            printf(ANSI_RED"%s"ANSI_RESET"\n> ", buff);
-            fflush(stdout);
-            break;
-        case CLIENT_UNREG:
-            pthread_mutex_lock(&list_mutex);
-
-            close_socket(client_fd);
-            remove_clist(&clist, client_fd);
-
-            pthread_mutex_unlock(&list_mutex);
-            break;
-        default:
-            break;
-    }
-}
 
 void* network(void *arg)
 {
@@ -206,6 +105,7 @@ void* network(void *arg)
             else accept_message(events[i].data.fd);
         }
     }
+
     return (void*) 0;
 }
 
@@ -228,7 +128,7 @@ void* clients_ping(void *arg)
         reset_ping(&clist);
 
         for (p = clist.first; p != NULL; p = p->next)
-            send_packet(p->fd, SERVER_PING, "Ping");
+            send_packet(p->fd, SERVER_PING, "Ping", -1);
 
         pthread_mutex_unlock(&list_mutex);
 
@@ -259,6 +159,105 @@ int main(int argc, char const *argv[])
     sigwait(&set, &sig);
     for (i = 0; i<3; i++) pthread_cancel(pth[i]);
     exit(EXIT_SUCCESS);
+}
+
+void accept_message(int client_fd)
+{
+    packet_t pck;
+    char buff[MAX_MSG];
+    int t;
+    if ((t = read(client_fd, &pck, sizeof(packet_t))) <= 0) return;
+    if ((t = read(client_fd, buff, pck.msg_length)) <= 0) return;
+    switch(pck.msg_type)
+    {
+        case CLIENT_PONG:
+            pthread_mutex_lock(&list_mutex);
+
+            confirm_ping(&clist, client_fd);
+
+            pthread_mutex_unlock(&list_mutex);
+            break;
+        case CLIENT_ANSW:
+            printf("[%i] %s\n"ANSI_BLUE"%i> "ANSI_RESET, \
+                pck.c_count, buff, counter);
+            fflush(stdout);
+            break;
+        case CLIENT_ERR:
+            printf(ANSI_RED"%s"ANSI_BLUE"\n%i> "ANSI_RESET, buff, counter);
+            fflush(stdout);
+            break;
+        case CLIENT_UNREG:
+            pthread_mutex_lock(&list_mutex);
+
+            close_socket(client_fd);
+            remove_clist(&clist, client_fd);
+
+            pthread_mutex_unlock(&list_mutex);
+            break;
+        default:
+            break;
+    }
+}
+
+int accept_client(int server_fd)
+{
+    int client_fd;
+    packet_t pck;
+    char buff[MAX_MSG];
+
+    if ((client_fd = accept(server_fd, NULL, NULL)) < 0) return 0;
+    read(client_fd, &pck, sizeof(packet_t));
+    read(client_fd, buff, pck.msg_length);
+
+    pthread_mutex_lock(&list_mutex);
+
+    if (clist.size >= MAX_CLIENTS)
+    {
+        pthread_mutex_unlock(&list_mutex);
+
+        send_packet(client_fd, SERVER_REJECT, "Server full", -1);
+        close_socket(client_fd);
+        return 0;
+    } 
+    if (is_present_clist(&clist, buff))
+    {
+        pthread_mutex_unlock(&list_mutex);
+
+        send_packet(client_fd, SERVER_REJECT, "Name already in use", -1);
+        close_socket(client_fd);
+        return 0;
+    }
+
+    add_clist(&clist, client_fd, buff);
+
+    pthread_mutex_unlock(&list_mutex);
+
+    if(send_packet(client_fd, SERVER_ACCEPT, \
+        "CALC cluster server: welcome!", -1)<0)
+        return 0;
+    return client_fd;
+}
+
+void close_socket(int socket_fd)
+{
+    shutdown(socket_fd, SHUT_RDWR);
+    close(socket_fd);
+}
+
+int send_packet(int client_fd, msg_t msg_type, char* msg, int cnt)
+{
+    void *buff;
+    packet_t pck;
+    pck.msg_type = msg_type;
+    pck.msg_length = strlen(msg) + 1;
+    pck.c_count = cnt;
+
+    buff = malloc(sizeof(packet_t) + pck.msg_length);
+    memcpy(buff, &pck, sizeof(packet_t));
+    memcpy(buff+sizeof(packet_t), msg, pck.msg_length);
+    if (write(client_fd, buff, 
+        sizeof(packet_t) + pck.msg_length) < 0) return -1;
+    return 0;
 }
 
 void init_socket(void)

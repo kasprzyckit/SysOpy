@@ -18,7 +18,7 @@ typedef char msg_t;
 typedef struct {
     msg_t msg_type;
     int msg_length;
-    int calc_counter;
+    int c_count;
 } packet_t;
 
 struct client_node {
