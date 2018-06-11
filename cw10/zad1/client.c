@@ -16,7 +16,7 @@
 #include <signal.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include "../calc.h"
+#include "calc.h"
 
 #define ANSI_RED     "\x1b[91m"
 #define ANSI_RESET   "\x1b[0m"

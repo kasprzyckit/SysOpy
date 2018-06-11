@@ -18,7 +18,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <fcntl.h>
-#include "../calc.h"
+#include "calc.h"
 
 #define ANSI_RED     "\x1b[91m"
 #define ANSI_BLUE    "\x1b[34m"
